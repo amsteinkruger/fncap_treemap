@@ -21,11 +21,9 @@ dat_table = "data/TreeMap/Treemap2016_tree_table.csv" %>% read_csv
 
 dat_raster_categories = cats(dat_raster)[[1]] %>% as_tibble
 
-dat_raster_cat = dat_raster
-
-activeCat(dat_raster_cat) = 10 # STANDHT
-
-dat_raster_cats = dat_raster %>% catalyze # Categorical layer into multiple continuous layers
+# dat_raster_cat = dat_raster
+# activeCat(dat_raster_cat) = 10 # STANDHT
+# dat_raster_cats = dat_raster %>% catalyze # Categorical layer into multiple continuous layers; incredibly slow, do not use
 
 # Comparing dat_table and dat_raster_categories suggests two things:
 #  Value is raster cell ID is tm_id.
@@ -51,8 +49,33 @@ dat_crop =
   trim
 
 # next: figure out what to do about attributes (cats(dat_crop)[[1]]) for dropped cells for quicker manipulation
+#  - actually don't do that, just figure out more about how terra handles raster attribute tables and don't break anything
 
 # Get a cell/tm_id attribute (like CARBON_L) onto a plot to show it can be manipulated.
-# Get a tree attribute onto a plot to show it can be manipulated.
+
+activeCat(dat_crop) = 18
+
+dat_crop = dat_crop %>% as.numeric
+
+dat_crop %>% plot
+
+vis_crop =  
+  ggplot() + 
+  geom_spatraster(data = dat_crop,
+                  maxcell = Inf) +
+  scale_fill_viridis(option = "mako",
+                     na.value = NA) +
+  labs(title = "Live Cubic Feet per Acre for Clallam County, WA in TreeMap 2016") +
+  theme(legend.title = element_blank())
+
+ggsave("out/vis_crop.png",
+       vis_crop,
+       dpi = 300,
+       width = 6.5,
+       bg = "transparent")
+
 # Bring in a fire raster to show some sort of fire data manipulation with TreeMap.
+# Get a tree attribute onto a plot to show it can be manipulated.
+# Get a tree/condition/plot attribute onto a plot from another year's as-is FIA data to show we can get data a la carte.
+# Once raster shenanigans are a little more resolved, figure out how to neatly pull data out of raster format for easier handling
 
