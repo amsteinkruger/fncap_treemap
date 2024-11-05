@@ -1,13 +1,14 @@
-# Check out Treemap for a quick demo.
+# Check out TreeMap for a quick demo.
 
 # Get packages.
 
 library(terra)
 library(tidyverse)
+library(viridis)
 library(tidyterra)
 library(magrittr)
 
-# Get dasta.
+# Get data and demo some basic manipulations.
 
 #  Get a raster.
 
@@ -17,20 +18,9 @@ dat_raster = "data/TreeMap/TreeMap2016.tif" %>% rast
 
 dat_table = "data/TreeMap/Treemap2016_tree_table.csv" %>% read_csv
 
-# Mess around.
+# Get raster attribute table for reference.
 
 dat_raster_categories = cats(dat_raster)[[1]] %>% as_tibble
-
-# dat_raster_cat = dat_raster
-# activeCat(dat_raster_cat) = 10 # STANDHT
-# dat_raster_cats = dat_raster %>% catalyze # Categorical layer into multiple continuous layers; incredibly slow, do not use
-
-# Comparing dat_table and dat_raster_categories suggests two things:
-#  Value is raster cell ID is tm_id.
-#  The geotiff metadata associated with TreeMap2016.tif is richer, somehow, than the database in Treemap2016_tree_table.csv.
-#   - this is untrue; the "geotiff metadata" which is actually just data is cell-level, the table is tree (?) level
-#  All of this is for 2016.
-#  Uniqueness of observations is not clear from a close look at the data and requires a pass through documentation.
 
 # Get administrative boundaries to reduce to CA, OR, WA.
 dat_boundaries = 
@@ -48,34 +38,97 @@ dat_crop =
   mask(dat_boundaries) %>% 
   trim
 
-# next: figure out what to do about attributes (cats(dat_crop)[[1]]) for dropped cells for quicker manipulation
-#  - actually don't do that, just figure out more about how terra handles raster attribute tables and don't break anything
+# Get a cell attribute onto a plot.
 
-# Get a cell/tm_id attribute (like CARBON_L) onto a plot to show it can be manipulated.
+dat_carbon_live = dat_crop
 
-activeCat(dat_crop) = 18
+activeCat(dat_carbon_live) = 23
 
-dat_crop = dat_crop %>% as.numeric
+dat_carbon_live = dat_carbon_live %>% as.numeric
 
-dat_crop %>% plot
+# dat_carbon_live %>% plot
 
-vis_crop =  
+vis_carbon_live =  
   ggplot() + 
-  geom_spatraster(data = dat_crop,
+  geom_spatraster(data = dat_carbon_live,
                   maxcell = Inf) +
-  scale_fill_viridis(option = "mako",
-                     na.value = NA) +
-  labs(title = "Live Cubic Feet per Acre for Clallam County, WA in TreeMap 2016") +
+  scale_fill_viridis(na.value = NA) +
+  labs(title = "Live Standing Carbon (Tons/Acre), Clallam County, WA") +
   theme(legend.title = element_blank())
 
-ggsave("out/vis_crop.png",
-       vis_crop,
+ggsave("out/vis_carbon_live.png",
+       vis_carbon_live,
+       dpi = 300,
+       width = 6,
+       height = 4,
+       bg = "transparent")
+
+# Get two cell attributes into a raster arithmetic operation, then onto a plot.
+
+dat_carbon_dead = dat_crop
+
+activeCat(dat_carbon_dead) = 24
+
+dat_carbon_dead = dat_carbon_dead %>% as.numeric %>% subst(-99, 0) %>% subst(NA, 0) # Assume NAs are zeros, just for fun.
+
+# dat_carbon_dead %>% plot
+
+dat_carbon_standing = dat_carbon_live + dat_carbon_dead
+
+# dat_carbon_standing %>% plot
+
+vis_carbon_standing = 
+  ggplot() + 
+  geom_spatraster(data = dat_carbon_standing,
+                  maxcell = Inf) +
+  scale_fill_viridis(na.value = NA) +
+  labs(title = "Standing Carbon (Tons/Acre), Clallam County, WA") +
+  theme(legend.title = element_blank())
+
+ggsave("out/vis_carbon_standing.png",
+       vis_carbon_standing,
        dpi = 300,
        width = 6.5,
        bg = "transparent")
 
-# Bring in a fire raster to show some sort of fire data manipulation with TreeMap.
-# Get a tree attribute onto a plot to show it can be manipulated.
-# Get a tree/condition/plot attribute onto a plot from another year's as-is FIA data to show we can get data a la carte.
-# Once raster shenanigans are a little more resolved, figure out how to neatly pull data out of raster format for easier handling
+# Get a fire raster onto the TreeMap raster and into a plot. 
+
+dat_burn = 
+  "data/FSIM/WA/BP_WA.tif" %>% 
+  rast %>% 
+  project(dat_raster %>% crs) %>% 
+  crop(dat_boundaries) %>% 
+  mask(dat_boundaries) %>% 
+  trim %>% 
+  resample(dat_carbon_standing)
+
+vis_burn = 
+  ggplot() + 
+  geom_spatraster(data = dat_burn,
+                  maxcell = Inf) +
+  scale_fill_viridis(option = "magma",
+                     na.value = NA) +
+  labs(title = "Burn Probability, Clallam County, WA") +
+  theme(legend.title = element_blank())
+
+ggsave("out/vis_burn.png",
+       vis_burn,
+       dpi = 300,
+       width = 6.5,
+       bg = "transparent")
+
+# Get a fire raster and a TreeMap cell attribute into a raster statistical operation (try covariance and correlation).
+
+dat_carbon_burn = c(dat_carbon_standing, dat_burn)
+
+dat_carbon_burn_cov = dat_carbon_burn %>% layerCor("cov", asSample = FALSE, use = "complete.obs")
+dat_carbon_burn_cor = dat_carbon_burn %>% layerCor("cor", asSample = FALSE, use = "complete.obs")
+
+dat_carbon_burn_cov$covariance[2, 1] # Covariance of tons of standing carbon per acre (c.2016) with annual burn probability (c.2020).
+dat_carbon_burn_cor$correlation[2, 1] # Correlation of tons of standing carbon per acre (c.2016) with annual burn probability (c.2020).
+
+# Unfinished steps:
+# Get FIA data from outside of TreeMap, crosswalk it to TreeMap ID by CN, and get it onto a plot. 
+# Get data out of raster format to demo simpler manipulation once geospatial steps are sorted.
+# Extend prior steps to a panel of FIA data.
 
